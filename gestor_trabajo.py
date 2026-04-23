@@ -44,7 +44,7 @@ data = cargar_datos()
 # LOGIN
 # -----------------------------
 if not st.session_state.login:
-    st.subheader("Iniciar sesión")
+    st.subheader("Login")
 
     user = st.text_input("Usuario")
     password = st.text_input("Contraseña", type="password")
@@ -54,52 +54,91 @@ if not st.session_state.login:
             st.session_state.login = True
             st.session_state.user = user
 
-            # Crear usuario en JSON si no existe
             if user not in data:
                 data[user] = {
-                    "materias": [],
-                    "tareas": []
+                    "tareas": [],
+                    "examenes": []
                 }
                 guardar_datos(data)
 
             st.success("Bienvenido Pato 😎")
         else:
-            st.error("Usuario o contraseña incorrectos")
+            st.error("Datos incorrectos")
 
 # -----------------------------
-# PANEL PRINCIPAL
+# PANEL
 # -----------------------------
 else:
-    st.write(f"👤 Usuario: {st.session_state.user}")
-
     usuario = st.session_state.user
 
-    # -------- MATERIAS --------
-    st.subheader("Materias")
-    nueva_materia = st.text_input("Agregar materia")
+    st.sidebar.title("Menú")
+    opcion = st.sidebar.radio("Ir a:", ["Tareas", "Exámenes"])
 
-    if st.button("Agregar materia"):
-        if nueva_materia:
-            data[usuario]["materias"].append(nueva_materia)
-            guardar_datos(data)
+    st.write(f"👤 Usuario: {usuario}")
 
-    for m in data[usuario]["materias"]:
-        st.write("📘", m)
+    # ---------------- TAREAS ----------------
+    if opcion == "Tareas":
+        st.subheader("📝 Tareas")
 
-    # -------- TAREAS --------
-    st.subheader("Tareas")
-    nueva_tarea = st.text_input("Agregar tarea")
+        nueva = st.text_input("Nueva tarea")
 
-    if st.button("Agregar tarea"):
-        if nueva_tarea:
-            data[usuario]["tareas"].append(nueva_tarea)
-            guardar_datos(data)
+        if st.button("Agregar tarea"):
+            if nueva:
+                data[usuario]["tareas"].append({
+                    "texto": nueva,
+                    "hecho": False
+                })
+                guardar_datos(data)
 
-    for t in data[usuario]["tareas"]:
-        st.write("📝", t)
+        for i, tarea in enumerate(data[usuario]["tareas"]):
+            col1, col2 = st.columns([4,1])
 
-    # -------- LOGOUT --------
-    if st.button("Cerrar sesión"):
+            with col1:
+                if tarea["hecho"]:
+                    st.write(f"✅ ~~{tarea['texto']}~~")
+                else:
+                    st.write(f"⬜ {tarea['texto']}")
+
+            with col2:
+                if not tarea["hecho"]:
+                    if st.button("✔", key=f"t{i}"):
+                        data[usuario]["tareas"][i]["hecho"] = True
+                        guardar_datos(data)
+                        st.rerun()
+
+    # ---------------- EXAMENES ----------------
+    elif opcion == "Exámenes":
+        st.subheader("📚 Exámenes")
+
+        nuevo = st.text_input("Nuevo examen")
+
+        if st.button("Agregar examen"):
+            if nuevo:
+                data[usuario]["examenes"].append({
+                    "texto": nuevo,
+                    "hecho": False
+                })
+                guardar_datos(data)
+
+        for i, examen in enumerate(data[usuario]["examenes"]):
+            col1, col2 = st.columns([4,1])
+
+            with col1:
+                if examen["hecho"]:
+                    st.write(f"✅ ~~{examen['texto']}~~")
+                else:
+                    st.write(f"⬜ {examen['texto']}")
+
+            with col2:
+                if not examen["hecho"]:
+                    if st.button("✔", key=f"e{i}"):
+                        data[usuario]["examenes"][i]["hecho"] = True
+                        guardar_datos(data)
+                        st.rerun()
+
+    # ---------------- LOGOUT ----------------
+    if st.sidebar.button("Cerrar sesión"):
         st.session_state.login = False
         st.session_state.user = None
+        st.rerun()
    
