@@ -3,154 +3,248 @@ import json
 import os
 from datetime import date
 
-# ---------------- CONFIG ----------------
-USUARIOS = {"pato": "1234"}
-DATA_FILE = "datos.json"
+ARCHIVO = "datos.json"
 
-# ---------------- FUNCIONES ----------------
-def cargar_datos():
-    if not os.path.exists(DATA_FILE):
-        return {}
-    with open(DATA_FILE, "r") as f:
-        return json.load(f)
+# -----------------------------
+# CARGAR DATOS
+# -----------------------------
+if os.path.exists(ARCHIVO):
+    with open(ARCHIVO, "r") as f:
+        datos = json.load(f)
+else:
+    datos = {}
 
-def guardar_datos(data):
-    with open(DATA_FILE, "w") as f:
-        json.dump(data, f, indent=4)
+# -----------------------------
+# USUARIO ÚNICO
+# -----------------------------
+usuarios = {
+    "pato": "1234"
+}
 
-# ---------------- SESSION ----------------
-if "login" not in st.session_state:
-    st.session_state.login = False
+# -----------------------------
+# INIT APP
+# -----------------------------
+st.title("📚 Organizador de Estudio")
 
+# -----------------------------
+# LOGIN
+# -----------------------------
 if "user" not in st.session_state:
-    st.session_state.user = None
 
-# ---------------- APP ----------------
-st.title("📚 Organizador Escolar PRO")
+    st.subheader("🔐 Login")
 
-data = cargar_datos()
-
-# ---------------- LOGIN ----------------
-if not st.session_state.login:
-    st.subheader("Login")
     user = st.text_input("Usuario")
     password = st.text_input("Contraseña", type="password")
 
     if st.button("Ingresar"):
-        if user in USUARIOS and USUARIOS[user] == password:
-            st.session_state.login = True
+
+        if user in usuarios and usuarios[user] == password:
+
             st.session_state.user = user
 
-            if user not in data:
-                data[user] = {
-                    "tareas": [],
-                    "examenes": []
+            if user not in datos:
+                datos[user] = {
+                    "trabajos": [],
+                    "examenes": [],
+                    "materias": {
+                        "politica": {"peso": 8},
+                        "literatura": {"peso": 6},
+                        "economia": {"peso": 9},
+                        "matematica": {"peso": 6}
+                    }
                 }
-                guardar_datos(data)
+
+                with open(ARCHIVO, "w") as f:
+                    json.dump(datos, f)
 
             st.rerun()
+
         else:
-            st.error("Datos incorrectos")
+            st.error("Usuario o contraseña incorrectos")
 
-# ---------------- PANEL ----------------
+# -----------------------------
+# APP PRINCIPAL
+# -----------------------------
 else:
-    usuario = st.session_state.user
 
-    # -------- SIDEBAR --------
-    st.sidebar.title("📌 Menú")
-    opcion = st.sidebar.selectbox(
-        "Secciones",
-        ["Dashboard", "Tareas", "Exámenes", "Cumplidos"]
+    user = st.session_state.user
+
+    if user not in datos:
+        datos[user] = {"trabajos": [], "examenes": [], "materias": {}}
+
+    user_data = datos[user]
+
+    # -------------------------
+    # FUNCION SCORE
+    # -------------------------
+    def calcular_score(peso, avance, longitud, dias):
+        if dias <= 1:
+            return 100
+        return (peso * longitud * (6 - avance)) / dias
+
+    # -------------------------
+    # MENU
+    # -------------------------
+    menu = st.sidebar.radio(
+        "Menú",
+        ["📚 Trabajos", "📝 Exámenes", "⚙️ Materias", "✅ Cumplidos", "🚪 Salir"]
     )
 
-    if st.sidebar.button("Cerrar sesión"):
-        st.session_state.login = False
-        st.session_state.user = None
+    # =====================================================
+    # TRABAJOS
+    # =====================================================
+    if menu == "📚 Trabajos":
+
+        st.subheader("📚 Trabajos")
+
+        materias = list(user_data["materias"].keys())
+
+        if materias:
+
+            materia = st.selectbox("Materia", materias)
+            titulo = st.text_input("Título del trabajo")
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                fecha = st.date_input("Fecha de entrega")
+
+            with col2:
+                longitud = st.slider("Longitud", 1, 5)
+
+            avance = st.slider("Avance", 1, 5)
+
+            if st.button("Agregar trabajo"):
+
+                hoy = date.today()
+                dias = (fecha - hoy).days
+
+                peso = user_data["materias"][materia]["peso"]
+
+                score = calcular_score(peso, avance, longitud, dias)
+
+                user_data["trabajos"].append({
+                    "titulo": titulo,
+                    "materia": materia,
+                    "fecha": str(fecha),
+                    "dias": dias,
+                    "score": score,
+                    "estado": "pendiente"
+                })
+
+                with open(ARCHIVO, "w") as f:
+                    json.dump(datos, f)
+
+        st.divider()
+
+        st.subheader("📊 Pendientes")
+
+        trabajos = [t for t in user_data["trabajos"] if t["estado"] == "pendiente"]
+        ordenados = sorted(trabajos, key=lambda x: x["score"], reverse=True)
+
+        for i, t in enumerate(ordenados):
+
+            col1, col2 = st.columns([4, 1])
+
+            with col1:
+                st.write(f"🏷️ {t['titulo']} | 📚 {t['materia']} | 📅 {t['fecha']} | ⭐ {round(t['score'],2)}")
+
+            with col2:
+                if st.button("✔️", key=f"done_{i}"):
+
+                    for x in user_data["trabajos"]:
+                        if x == t:
+                            x["estado"] = "hecho"
+
+                    with open(ARCHIVO, "w") as f:
+                        json.dump(datos, f)
+
+                    st.rerun()
+
+    # =====================================================
+    # EXÁMENES
+    # =====================================================
+    elif menu == "📝 Exámenes":
+
+        st.subheader("📝 Exámenes")
+
+        materias = list(user_data["materias"].keys())
+
+        if materias:
+
+            materia = st.selectbox("Materia", materias)
+            fecha = st.date_input("Fecha examen")
+            temas = st.text_area("Temas (coma separada)")
+
+            if st.button("Agregar examen"):
+
+                user_data["examenes"].append({
+                    "materia": materia,
+                    "fecha": str(fecha),
+                    "temas": [t.strip() for t in temas.split(",")]
+                })
+
+                with open(ARCHIVO, "w") as f:
+                    json.dump(datos, f)
+
+        st.divider()
+
+        for i, e in enumerate(user_data["examenes"]):
+
+            with st.expander(f"📝 {e['materia']} - {e['fecha']}"):
+
+                for t in e["temas"]:
+                    st.write("• " + t)
+
+    # =====================================================
+    # MATERIAS
+    # =====================================================
+    elif menu == "⚙️ Materias":
+
+        st.subheader("⚙️ Materias")
+
+        nueva = st.text_input("Nueva materia")
+        peso = st.slider("Dificultad", 1, 10)
+
+        if st.button("Agregar materia") and nueva:
+
+            user_data["materias"][nueva.lower()] = {
+                "peso": peso
+            }
+
+            with open(ARCHIVO, "w") as f:
+                json.dump(datos, f)
+
+        st.divider()
+
+        for m, v in user_data["materias"].items():
+
+            st.markdown(f"📘 **{m}** - peso: {v['peso']}")
+
+    # =====================================================
+    # CUMPLIDOS
+    # =====================================================
+    elif menu == "✅ Cumplidos":
+
+        st.subheader("✅ Cumplidos / Vencidos")
+
+        hoy = date.today()
+
+        for t in user_data["trabajos"]:
+
+            fecha = date.fromisoformat(t["fecha"])
+
+            if t["estado"] == "hecho":
+
+                st.success(f"✔️ {t['titulo']} - {t['materia']}")
+
+            elif fecha < hoy:
+
+                st.error(f"⚠️ VENCIDO: {t['titulo']} - {t['materia']}")
+
+    # =====================================================
+    # SALIR
+    # =====================================================
+    elif menu == "🚪 Salir":
+        del st.session_state.user
         st.rerun()
-
-    st.write(f"👤 Usuario: {usuario}")
-
-    # -------- CALENDARIO (minimizable) --------
-    with st.expander("📅 Calendario"):
-        st.date_input("Seleccionar fecha", date.today())
-
-    # -------- DASHBOARD --------
-    if opcion == "Dashboard":
-        st.subheader("📊 Resumen")
-
-        tareas = data[usuario]["tareas"]
-        examenes = data[usuario]["examenes"]
-
-        pendientes = sum(not t["hecho"] for t in tareas) + sum(not e["hecho"] for e in examenes)
-        completados = sum(t["hecho"] for t in tareas) + sum(e["hecho"] for e in examenes)
-
-        st.write(f"🟡 Pendientes: {pendientes}")
-        st.write(f"🟢 Completados: {completados}")
-
-    # -------- TAREAS --------
-    elif opcion == "Tareas":
-        st.subheader("📝 Tareas")
-
-        nueva = st.text_input("Nueva tarea")
-
-        if st.button("Agregar tarea"):
-            if nueva:
-                data[usuario]["tareas"].append({
-                    "texto": nueva,
-                    "hecho": False
-                })
-                guardar_datos(data)
-                st.rerun()
-
-        for i, t in enumerate(data[usuario]["tareas"]):
-            if not t["hecho"]:
-                col1, col2 = st.columns([4,1])
-
-                with col1:
-                    st.write(f"⬜ {t['texto']}")
-
-                with col2:
-                    if st.button("✔", key=f"t{i}"):
-                        data[usuario]["tareas"][i]["hecho"] = True
-                        guardar_datos(data)
-                        st.rerun()
-
-    # -------- EXAMENES --------
-    elif opcion == "Exámenes":
-        st.subheader("📚 Exámenes")
-
-        nuevo = st.text_input("Nuevo examen")
-
-        if st.button("Agregar examen"):
-            if nuevo:
-                data[usuario]["examenes"].append({
-                    "texto": nuevo,
-                    "hecho": False
-                })
-                guardar_datos(data)
-                st.rerun()
-
-        for i, e in enumerate(data[usuario]["examenes"]):
-            if not e["hecho"]:
-                col1, col2 = st.columns([4,1])
-
-                with col1:
-                    st.write(f"⬜ {e['texto']}")
-
-                with col2:
-                    if st.button("✔", key=f"e{i}"):
-                        data[usuario]["examenes"][i]["hecho"] = True
-                        guardar_datos(data)
-                        st.rerun()
-
-    # -------- CUMPLIDOS --------
-    elif opcion == "Cumplidos":
-        st.subheader("✅ Completados")
-
-        for t in data[usuario]["tareas"]:
-            if t["hecho"]:
-                st.write(f"📝 {t['texto']}")
-
-        for e in data[usuario]["examenes"]:
-            if e["hecho"]:
-                st.write(f"📚 {e['texto']}")
